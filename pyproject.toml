@@ -1,6 +1,6 @@
 [project]
 name = "ant2oai"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightweight Anthropic-to-OpenAI API proxy — run Claude Code with any OpenAI-compatible backend"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -49,6 +49,7 @@ Issues = "https://github.com/WqyJh/a2o/issues"
 
 [project.scripts]
 a2o = "a2o.cli:main"
+ant2oai = "a2o.cli:main"
 
 [project.optional-dependencies]
 dev = [
