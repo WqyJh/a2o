@@ -279,11 +279,41 @@ def create_app(config: Config) -> FastAPI:
 # ---------------------------------------------------------------------------
 
 
+_ENV_PREFIX = "A2O_"
+
+
+def _config_to_env(config: Config) -> dict[str, str]:
+    """Serialize config fields to environment variables."""
+    import os
+
+    env = os.environ.copy()
+    for field_name in config.__dataclass_fields__:
+        env[f"{_ENV_PREFIX}{field_name.upper()}"] = str(getattr(config, field_name))
+    return env
+
+
+_INT_FIELDS = frozenset(
+    f.name for f in Config.__dataclass_fields__.values() if isinstance(f.default, int)
+)
+
+
+def create_app_from_env() -> FastAPI:
+    """Factory called by uvicorn workers -- reads config from env vars."""
+    import os
+
+    kwargs: dict[str, Any] = {}
+    for field_name in Config.__dataclass_fields__:
+        env_val = os.environ.get(f"{_ENV_PREFIX}{field_name.upper()}")
+        if env_val is not None:
+            kwargs[field_name] = int(env_val) if field_name in _INT_FIELDS else env_val
+    return create_app(Config(**kwargs))
+
+
 def run_server(config: Config) -> None:
     """Run the proxy server with uvicorn (multi-worker support built-in)."""
-    import uvicorn
+    import os
 
-    app = create_app(config)
+    import uvicorn
 
     logger.info(
         "Starting server on %s:%s -> %s (workers=%d)",
@@ -293,10 +323,21 @@ def run_server(config: Config) -> None:
         config.workers,
     )
 
-    uvicorn.run(
-        app,
-        host=config.host,
-        port=config.port,
-        workers=config.workers,
-        log_level="info",
-    )
+    if config.workers > 1:
+        # Multi-worker: pass app as import string so uvicorn can fork
+        os.environ.update(_config_to_env(config))
+        uvicorn.run(
+            "a2o.server:create_app_from_env",
+            factory=True,
+            host=config.host,
+            port=config.port,
+            workers=config.workers,
+            log_level="info",
+        )
+    else:
+        uvicorn.run(
+            create_app(config),
+            host=config.host,
+            port=config.port,
+            log_level="info",
+        )

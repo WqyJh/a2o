@@ -1,6 +1,6 @@
 [project]
 name = "ant2oai"
-version = "0.1.1"
+version = "0.1.2"
 description = "Lightweight Anthropic-to-OpenAI API proxy — run Claude Code with any OpenAI-compatible backend"
 readme = "README.md"
 license = { file = "LICENSE" }
