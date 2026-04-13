@@ -1,5 +1,5 @@
 [project]
-name = "a2o"
+name = "ant2oai"
 version = "0.1.0"
 description = "Lightweight Anthropic-to-OpenAI API proxy — run Claude Code with any OpenAI-compatible backend"
 readme = "README.md"

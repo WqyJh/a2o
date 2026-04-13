@@ -1,7 +1,7 @@
 # a2o
 
-[![PyPI version](https://img.shields.io/pypi/v/a2o.svg)](https://pypi.org/project/a2o/)
-[![Python](https://img.shields.io/pypi/pyversions/a2o.svg)](https://pypi.org/project/a2o/)
+[![PyPI version](https://img.shields.io/pypi/v/ant2oai.svg)](https://pypi.org/project/ant2oai/)
+[![Python](https://img.shields.io/pypi/pyversions/ant2oai.svg)](https://pypi.org/project/ant2oai/)
 [![CI](https://github.com/WqyJh/a2o/actions/workflows/ci.yml/badge.svg)](https://github.com/WqyJh/a2o/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -20,13 +20,13 @@ Lightweight **Anthropic-to-OpenAI** API proxy. Run [Claude Code](https://docs.an
 ## Installation
 
 ```bash
-pip install a2o
+pip install ant2oai
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv pip install a2o
+uv pip install ant2oai
 ```
 
 ## Quick Start
