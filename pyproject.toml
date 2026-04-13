@@ -3,7 +3,7 @@ name = "a2o"
 version = "0.1.0"
 description = "Lightweight Anthropic-to-OpenAI API proxy — run Claude Code with any OpenAI-compatible backend"
 readme = "README.md"
-license = "MIT"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [
     { name = "WqyJh" },

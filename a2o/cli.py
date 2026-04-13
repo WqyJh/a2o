@@ -12,7 +12,7 @@ from a2o.server import run_server
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="anthropic-proxy",
+        prog="a2o",
         description="Lightweight Anthropic→OpenAI API proxy for Claude Code integration.",
     )
     parser.add_argument(
