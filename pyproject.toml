@@ -36,7 +36,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "aiohttp>=3.9,<4",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "httpx>=0.28",
 ]
 
 [project.urls]
@@ -52,7 +54,6 @@ a2o = "a2o.cli:main"
 dev = [
     "pytest>=8.0,<9",
     "pytest-asyncio>=0.23,<1",
-    "pytest-aiohttp>=1.0,<2",
 ]
 
 [build-system]

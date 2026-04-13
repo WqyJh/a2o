@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import multiprocessing
-import signal
-import os
-from typing import Any
+from typing import Any, AsyncIterator
 
-from aiohttp import web
+from contextlib import asynccontextmanager
+
+import httpx
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from a2o.config import Config
 from a2o.converters.parser import ParseError, parse_anthropic_request
@@ -34,10 +35,6 @@ def _anthropic_error(status: int, error_type: str, message: str) -> dict:
     }
 
 
-def _json_response(data: Any, status: int = 200) -> web.Response:
-    return web.json_response(data, status=status)
-
-
 # ---------------------------------------------------------------------------
 # Handler
 # ---------------------------------------------------------------------------
@@ -46,44 +43,40 @@ def _json_response(data: Any, status: int = 200) -> web.Response:
 class AnthropicMessageHandler:
     def __init__(self, config: Config) -> None:
         self.config = config
-        self._client_session: Any = None
+        self._client: httpx.AsyncClient | None = None
 
-    async def get_client_session(self) -> Any:
-        if self._client_session is None or self._client_session.closed:
-            import aiohttp
-
-            connector = aiohttp.TCPConnector(
-                limit=self.config.max_connections,
-                limit_per_host=self.config.max_connections_per_host,
-                enable_cleanup_closed=True,
+    async def get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                limits=httpx.Limits(
+                    max_connections=self.config.max_connections,
+                    max_keepalive_connections=self.config.max_connections_per_host,
+                ),
+                timeout=httpx.Timeout(self.config.request_timeout),
             )
-            self._client_session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=aiohttp.ClientTimeout(total=self.config.request_timeout),
-            )
-        return self._client_session
+        return self._client
 
     async def close(self) -> None:
-        if self._client_session and not self._client_session.closed:
-            await self._client_session.close()
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
 
-    async def handle_messages(self, request: web.Request) -> web.Response:
+    async def handle_messages(self, request: Request) -> JSONResponse | StreamingResponse:
         """Handle POST /v1/messages (Anthropic API format)."""
         try:
             raw_body = await request.json()
         except Exception:
-            return _json_response(
+            return JSONResponse(
                 _anthropic_error(400, "invalid_request_error", "Invalid JSON body"),
-                status=400,
+                status_code=400,
             )
 
         # Parse Anthropic request
         try:
             anthropic_req = parse_anthropic_request(raw_body)
         except ParseError as e:
-            return _json_response(
+            return JSONResponse(
                 _anthropic_error(400, "invalid_request_error", e.message),
-                status=400,
+                status_code=400,
             )
 
         # Apply model override if configured
@@ -103,13 +96,13 @@ class AnthropicMessageHandler:
         # Build upstream URL
         upstream_url = self.config.openai_base_url
         if not upstream_url:
-            return _json_response(
+            return JSONResponse(
                 _anthropic_error(500, "api_error", "No upstream URL configured"),
-                status=500,
+                status_code=500,
             )
 
         # Forward incoming headers that might be useful
-        headers = {
+        headers: dict[str, str] = {
             "Content-Type": "application/json",
         }
         # Pass through Authorization header
@@ -118,13 +111,9 @@ class AnthropicMessageHandler:
             headers["Authorization"] = auth
 
         if streaming:
-            return await self._handle_stream(
-                request, upstream_url, openai_body, headers, model
-            )
+            return await self._handle_stream(upstream_url, openai_body, headers, model)
         else:
-            return await self._handle_nonstream(
-                upstream_url, openai_body, headers, model
-            )
+            return await self._handle_nonstream(upstream_url, openai_body, headers, model)
 
     async def _handle_nonstream(
         self,
@@ -132,84 +121,91 @@ class AnthropicMessageHandler:
         body: dict[str, Any],
         headers: dict[str, str],
         model: str,
-    ) -> web.Response:
-        session = await self.get_client_session()
+    ) -> JSONResponse:
+        client = await self.get_client()
         try:
-            async with session.post(url, json=body, headers=headers) as resp:
-                status = resp.status
-                result = await resp.json()
+            resp = await client.post(url, json=body, headers=headers)
+            status = resp.status_code
+            result = resp.json()
         except Exception as e:
             logger.error("Upstream request failed: %s", e)
-            return _json_response(
+            return JSONResponse(
                 _anthropic_error(502, "api_error", f"Upstream request failed: {e}"),
-                status=502,
+                status_code=502,
             )
 
         if status >= 400:
-            return _json_response(result, status=status)
+            return JSONResponse(result, status_code=status)
 
         anthropic_resp = convert_openai_to_anthropic(result, model=model)
-        return _json_response(anthropic_resp)
+        return JSONResponse(anthropic_resp)
 
     async def _handle_stream(
         self,
-        request: web.Request,
         url: str,
         body: dict[str, Any],
         headers: dict[str, str],
         model: str,
-    ) -> web.StreamResponse:
+    ) -> JSONResponse | StreamingResponse:
         # Ensure stream is set in the body
         body["stream"] = True
         if "stream_options" not in body:
             body["stream_options"] = {"include_usage": True}
 
-        session = await self.get_client_session()
-        response = web.StreamResponse(
-            status=200,
-            headers={
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        client = await self.get_client()
 
         try:
-            async with session.post(url, json=body, headers=headers) as upstream_resp:
-                if upstream_resp.status >= 400:
-                    error_text = await upstream_resp.text()
-                    try:
-                        error_body = json.loads(error_text)
-                    except json.JSONDecodeError:
-                        error_body = {"error": {"message": error_text}}
+            upstream_resp = await client.send(
+                client.build_request("POST", url, json=body, headers=headers),
+                stream=True,
+            )
+        except Exception as e:
+            logger.error("Streaming connection failed: %s", e)
+            return JSONResponse(
+                _anthropic_error(502, "api_error", f"Upstream error: {e}"),
+                status_code=502,
+            )
 
-                    error_msg = "Upstream error"
-                    err = error_body.get("error")
-                    if isinstance(err, dict):
-                        error_msg = err.get("message", error_msg)
-                    elif isinstance(err, str):
-                        error_msg = err
+        if upstream_resp.status_code >= 400:
+            error_text = await upstream_resp.aread()
+            await upstream_resp.aclose()
+            try:
+                error_body = json.loads(error_text)
+            except json.JSONDecodeError:
+                error_body = {"error": {"message": error_text.decode()}}
 
-                    response.set_status(upstream_resp.status)
-                    await response.prepare(request)
-                    error_event = json.dumps(
-                        {
-                            "type": "error",
-                            "error": {"type": "api_error", "message": error_msg},
-                        }
-                    )
-                    await response.write(
-                        f"event: error\ndata: {error_event}\n\n".encode()
-                    )
-                    await response.write_eof()
-                    return response
+            error_msg = "Upstream error"
+            err = error_body.get("error")
+            if isinstance(err, dict):
+                error_msg = err.get("message", error_msg)
+            elif isinstance(err, str):
+                error_msg = err
 
-                await response.prepare(request)
+            async def error_stream() -> AsyncIterator[bytes]:
+                error_event = json.dumps(
+                    {
+                        "type": "error",
+                        "error": {"type": "api_error", "message": error_msg},
+                    }
+                )
+                yield f"event: error\ndata: {error_event}\n\n".encode()
 
-                async def iter_openai_chunks():
-                    async for line in upstream_resp.content:
-                        line_str = line.decode("utf-8", errors="replace").strip()
+            return StreamingResponse(
+                error_stream(),
+                status_code=upstream_resp.status_code,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        async def generate() -> AsyncIterator[bytes]:
+            try:
+                async def iter_openai_chunks() -> AsyncIterator[dict]:
+                    async for line in upstream_resp.aiter_lines():
+                        line_str = line.strip()
                         if not line_str:
                             continue
                         if line_str.startswith("data: "):
@@ -225,26 +221,28 @@ class AnthropicMessageHandler:
                 async for sse_event in async_convert_openai_stream_to_anthropic_sse(
                     iter_openai_chunks(), model=model
                 ):
-                    await response.write(sse_event.encode("utf-8"))
+                    yield sse_event.encode("utf-8")
+            except Exception as e:
+                logger.error("Streaming error: %s", e, exc_info=True)
+                error_event = json.dumps(
+                    {
+                        "type": "error",
+                        "error": {"type": "api_error", "message": f"Upstream error: {e}"},
+                    }
+                )
+                yield f"event: error\ndata: {error_event}\n\n".encode()
+            finally:
+                await upstream_resp.aclose()
 
-                await response.write_eof()
-                return response
-
-        except Exception as e:
-            logger.error("Streaming error: %s", e, exc_info=True)
-            error_event = json.dumps(
-                {
-                    "type": "error",
-                    "error": {"type": "api_error", "message": f"Upstream error: {e}"},
-                }
-            )
-            try:
-                await response.prepare(request)
-                await response.write(f"event: error\ndata: {error_event}\n\n".encode())
-                await response.write_eof()
-            except Exception:
-                pass
-            return response
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -252,31 +250,27 @@ class AnthropicMessageHandler:
 # ---------------------------------------------------------------------------
 
 
-def create_app(config: Config) -> web.Application:
-    """Create the aiohttp application with routes."""
-    app = web.Application()
+def create_app(config: Config) -> FastAPI:
+    """Create the FastAPI application with routes."""
     handler = AnthropicMessageHandler(config)
 
-    # Anthropic endpoint
-    app.router.add_post("/v1/messages", handler.handle_messages)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):  # noqa: ARG001
+        yield
+        await handler.close()
 
-    # Health check
-    async def health(_request: web.Request) -> web.Response:
-        return _json_response({"status": "ok"})
+    app = FastAPI(lifespan=lifespan)
 
-    app.router.add_get("/health", health)
+    app.post("/v1/messages", response_model=None)(handler.handle_messages)
 
-    # Keep a reference for cleanup
-    app["handler"] = handler
-    app.on_shutdown.append(_on_shutdown)
+    @app.get("/health")
+    async def health() -> dict:
+        return {"status": "ok"}
+
+    # Store handler for test access
+    app.state.handler = handler
 
     return app
-
-
-async def _on_shutdown(app: web.Application) -> None:
-    handler = app.get("handler")
-    if isinstance(handler, AnthropicMessageHandler):
-        await handler.close()
 
 
 # ---------------------------------------------------------------------------
@@ -284,65 +278,24 @@ async def _on_shutdown(app: web.Application) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_single_worker(config: Config) -> None:
-    """Run a single aiohttp server process (the event loop)."""
-    import asyncio
-
-    async def _serve() -> None:
-        app = create_app(config)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, host=config.host, port=config.port)
-        logger.info(
-            "Worker %s listening on %s:%s -> %s",
-            os.getpid(),
-            config.host,
-            config.port,
-            config.openai_base_url,
-        )
-        await site.start()
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            await runner.cleanup()
-
-    asyncio.run(_serve())
-
-
 def run_server(config: Config) -> None:
-    """Run the proxy server, optionally with multiple worker processes."""
-    if config.workers <= 1:
-        _run_single_worker(config)
-        return
+    """Run the proxy server with uvicorn (multi-worker support built-in)."""
+    import uvicorn
 
-    workers = config.workers
-    children: list[multiprocessing.Process] = []
-
-    def _signal_handler(_signum: Any, _frame: Any) -> None:
-        for p in children:
-            if p.is_alive():
-                p.terminate()
-        for p in children:
-            p.join(timeout=5)
-
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+    app = create_app(config)
 
     logger.info(
-        "Starting %d workers on %s:%s -> %s",
-        workers,
+        "Starting server on %s:%s -> %s (workers=%d)",
         config.host,
         config.port,
         config.openai_base_url,
+        config.workers,
     )
 
-    for _ in range(workers):
-        p = multiprocessing.Process(target=_run_single_worker, args=(config,), daemon=True)
-        p.start()
-        children.append(p)
-
-    # Wait for all children
-    for p in children:
-        p.join()
+    uvicorn.run(
+        app,
+        host=config.host,
+        port=config.port,
+        workers=config.workers,
+        log_level="info",
+    )
