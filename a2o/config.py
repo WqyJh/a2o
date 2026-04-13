@@ -13,3 +13,6 @@ class Config:
     port: int = 3578
     request_timeout: int = 300
     stream_timeout: int = 300
+    workers: int = 1
+    max_connections: int = 1000
+    max_connections_per_host: int = 500

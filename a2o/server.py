@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import multiprocessing
+import signal
+import os
 from typing import Any
 
 from aiohttp import web
@@ -49,7 +52,13 @@ class AnthropicMessageHandler:
         if self._client_session is None or self._client_session.closed:
             import aiohttp
 
+            connector = aiohttp.TCPConnector(
+                limit=self.config.max_connections,
+                limit_per_host=self.config.max_connections_per_host,
+                enable_cleanup_closed=True,
+            )
             self._client_session = aiohttp.ClientSession(
+                connector=connector,
                 timeout=aiohttp.ClientTimeout(total=self.config.request_timeout),
             )
         return self._client_session
@@ -270,26 +279,70 @@ async def _on_shutdown(app: web.Application) -> None:
         await handler.close()
 
 
-async def run_server(config: Config) -> None:
-    """Run the proxy server."""
-    app = create_app(config)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host=config.host, port=config.port)
+# ---------------------------------------------------------------------------
+# Server startup
+# ---------------------------------------------------------------------------
+
+
+def _run_single_worker(config: Config) -> None:
+    """Run a single aiohttp server process (the event loop)."""
+    import asyncio
+
+    async def _serve() -> None:
+        app = create_app(config)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, host=config.host, port=config.port)
+        logger.info(
+            "Worker %s listening on %s:%s -> %s",
+            os.getpid(),
+            config.host,
+            config.port,
+            config.openai_base_url,
+        )
+        await site.start()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await runner.cleanup()
+
+    asyncio.run(_serve())
+
+
+def run_server(config: Config) -> None:
+    """Run the proxy server, optionally with multiple worker processes."""
+    if config.workers <= 1:
+        _run_single_worker(config)
+        return
+
+    workers = config.workers
+    children: list[multiprocessing.Process] = []
+
+    def _signal_handler(_signum: Any, _frame: Any) -> None:
+        for p in children:
+            if p.is_alive():
+                p.terminate()
+        for p in children:
+            p.join(timeout=5)
+
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
+
     logger.info(
-        "Starting Anthropic proxy on %s:%s -> %s",
+        "Starting %d workers on %s:%s -> %s",
+        workers,
         config.host,
         config.port,
         config.openai_base_url,
     )
-    await site.start()
 
-    # Wait forever
-    import asyncio
+    for _ in range(workers):
+        p = multiprocessing.Process(target=_run_single_worker, args=(config,), daemon=True)
+        p.start()
+        children.append(p)
 
-    try:
-        await asyncio.Event().wait()
-    except asyncio.CancelledError:
-        pass
-    finally:
-        await runner.cleanup()
+    # Wait for all children
+    for p in children:
+        p.join()
