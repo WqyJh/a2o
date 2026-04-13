@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 from a2o.config import Config
 from a2o.server import run_server
@@ -21,12 +20,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="OpenAI-compatible base URL (e.g. http://host/v1/chat/completions)",
     )
     parser.add_argument("--model", default="", help="Default model name override")
-    parser.add_argument(
-        "--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
-    )
-    parser.add_argument(
-        "--port", type=int, default=3578, help="Bind port (default: 3578)"
-    )
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=3578, help="Bind port (default: 3578)")
     parser.add_argument(
         "--timeout",
         type=int,

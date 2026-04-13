@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncIterator
-
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request
@@ -203,6 +203,7 @@ class AnthropicMessageHandler:
 
         async def generate() -> AsyncIterator[bytes]:
             try:
+
                 async def iter_openai_chunks() -> AsyncIterator[dict]:
                     async for line in upstream_resp.aiter_lines():
                         line_str = line.strip()

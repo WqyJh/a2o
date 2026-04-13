@@ -1,16 +1,15 @@
 """Unit tests for OpenAI → Anthropic streaming conversion."""
 
 import json
-import pytest
 
 from a2o.converters.streaming import (
-    convert_openai_stream_to_anthropic_sse,
-    EVENT_MESSAGE_START,
-    EVENT_CONTENT_BLOCK_START,
     EVENT_CONTENT_BLOCK_DELTA,
+    EVENT_CONTENT_BLOCK_START,
     EVENT_CONTENT_BLOCK_STOP,
     EVENT_MESSAGE_DELTA,
+    EVENT_MESSAGE_START,
     EVENT_MESSAGE_STOP,
+    convert_openai_stream_to_anthropic_sse,
 )
 
 
@@ -98,9 +97,7 @@ class TestSimpleStream:
         assert EVENT_MESSAGE_STOP in event_types
 
         # Collect text deltas
-        text_deltas = [
-            e for e in events if e.get("delta", {}).get("type") == "text_delta"
-        ]
+        text_deltas = [e for e in events if e.get("delta", {}).get("type") == "text_delta"]
         combined = "".join(e["delta"]["text"] for e in text_deltas)
         assert combined == "Hello there!"
 
@@ -261,9 +258,7 @@ class TestToolCallWithArgsInSameChunk:
             and e.get("delta", {}).get("type") == "input_json_delta"
         ]
         assert len(json_deltas) == 1
-        assert json.loads(json_deltas[0]["delta"]["partial_json"]) == {
-            "path": "/test.py"
-        }
+        assert json.loads(json_deltas[0]["delta"]["partial_json"]) == {"path": "/test.py"}
 
 
 class TestMultipleToolCalls:

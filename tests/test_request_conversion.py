@@ -2,11 +2,8 @@
 
 import json
 
-import pytest
-
-from a2o.converters.request import convert_anthropic_to_openai
 from a2o.converters.parser import parse_anthropic_request
-
+from a2o.converters.request import convert_anthropic_to_openai
 
 # ---------------------------------------------------------------------------
 # Helper

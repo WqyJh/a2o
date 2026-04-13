@@ -10,7 +10,6 @@ Or enable the pytest E2E test:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 import subprocess
@@ -25,7 +24,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from a2o.config import Config
 from a2o.server import create_app
-
 
 # Configuration
 UPSTREAM_URL = os.environ.get(
@@ -146,9 +144,7 @@ async def main() -> None:
                 assert body.get("role") == "assistant"
                 assert len(body.get("content", [])) > 0
                 text_content = " ".join(
-                    c.get("text", "")
-                    for c in body["content"]
-                    if c.get("type") == "text"
+                    c.get("text", "") for c in body["content"] if c.get("type") == "text"
                 )
                 print(f"[Step 2] Content: {text_content[:200]}...")
                 print("[Step 2] Direct proxy test passed! ✓")
@@ -187,7 +183,8 @@ async def main() -> None:
             test_file = os.path.join(work_dir, "hello.py")
             with open(test_file, "w") as f:
                 f.write(
-                    'def greet(name):\n    return f"Hello, {name}!"\n\nif __name__ == "__main__":\n    print(greet("World"))\n'
+                    'def greet(name):\n    return f"Hello, {name}!"\n\n'
+                    'if __name__ == "__main__":\n    print(greet("World"))\n'
                 )
 
             result = run_claude_code(
@@ -213,7 +210,8 @@ async def main() -> None:
                 else:
                     # Some non-fatal error (model issues etc.)
                     print(
-                        f"[Step 4] Claude Code returned non-zero ({result.returncode}), but proxy itself works"
+                        "[Step 4] Claude Code returned non-zero "
+                        f"({result.returncode}), but proxy itself works"
                     )
 
             # Cleanup

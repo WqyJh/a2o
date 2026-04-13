@@ -7,7 +7,6 @@ from typing import Any
 from a2o.models import (
     AnthropicMessage,
     AnthropicMessageRequest,
-    SystemContentBlock,
 )
 
 
@@ -184,9 +183,7 @@ def _process_user_message(msg: AnthropicMessage) -> list[dict[str, Any]]:
                             data = sub.source.get("data", "")
                             url = f"data:{media};base64,{data}"
                         if url:
-                            image_parts.append(
-                                {"type": "image_url", "image_url": {"url": url}}
-                            )
+                            image_parts.append({"type": "image_url", "image_url": {"url": url}})
         elif block.type == "text" and block.text:
             text_parts.append(block.text)
         elif block.type == "image" and block.source:

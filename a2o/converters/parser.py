@@ -76,9 +76,7 @@ def _parse_content_block(raw: dict[str, Any]) -> ContentBlock:
         if isinstance(raw_content, str):
             cb.content = raw_content
         elif isinstance(raw_content, list):
-            cb.content = [
-                _parse_content_block(c) for c in raw_content if isinstance(c, dict)
-            ]
+            cb.content = [_parse_content_block(c) for c in raw_content if isinstance(c, dict)]
         elif raw_content is None:
             cb.content = None
         else:
@@ -137,9 +135,7 @@ def _parse_messages(
     for i, raw in enumerate(data):
         _validate(isinstance(raw, dict), f"messages[{i}] must be a JSON object")
         role = raw.get("role")
-        _validate(
-            bool(role) and isinstance(role, str), f"messages[{i}].role is required"
-        )
+        _validate(bool(role) and isinstance(role, str), f"messages[{i}].role is required")
         _validate(
             role in ("user", "assistant"),
             f"messages[{i}].role must be 'user' or 'assistant', got '{role}'",
@@ -169,9 +165,7 @@ def parse_anthropic_request(data: dict[str, Any]) -> AnthropicMessageRequest:
 
     messages_raw = data.get("messages")
     _validate(
-        messages_raw is not None
-        and isinstance(messages_raw, list)
-        and len(messages_raw) > 0,
+        messages_raw is not None and isinstance(messages_raw, list) and len(messages_raw) > 0,
         "'messages' must contain at least one entry",
     )
     assert isinstance(messages_raw, list)  # guaranteed by validation

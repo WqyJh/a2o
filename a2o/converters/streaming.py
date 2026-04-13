@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, AsyncIterator
-
-from a2o.models import AnthropicUsage
-
+from collections.abc import AsyncIterator
+from typing import Any
 
 # Event type constants
 EVENT_MESSAGE_START = "message_start"
@@ -66,7 +64,7 @@ class _StreamState:
         self.message_started = False
         self.final_stop_reason = STOP_END_TURN
         self.latest_usage: dict[str, int] | None = None
-        # Track tool call states: index -> {id, name, args_buffer, index, started, json_sent, stopped}
+        # Track tool call states: index -> {id, name, args_buffer, ...}
         self._tool_calls: dict[int, dict[str, Any]] = {}
         # Track whether text and thinking blocks were emitted
         # Used to decide if thinking→text demotion is needed
@@ -166,16 +164,10 @@ class _StreamState:
             events.append(_sse(EVENT_CONTENT_BLOCK_START, start_data))
 
         # Try to emit accumulated JSON
-        if (
-            tool_state["started"]
-            and tool_state["args_buffer"]
-            and not tool_state["json_sent"]
-        ):
+        if tool_state["started"] and tool_state["args_buffer"] and not tool_state["json_sent"]:
             self._maybe_emit_tool_args(events, tool_state)
 
-    def _maybe_emit_tool_args(
-        self, events: list[str], tool_state: dict[str, Any]
-    ) -> None:
+    def _maybe_emit_tool_args(self, events: list[str], tool_state: dict[str, Any]) -> None:
         buf = tool_state["args_buffer"]
         if not buf:
             return
@@ -301,9 +293,7 @@ class _StreamState:
 
         # Thinking / reasoning content
         additional = delta.get("_additionalProperties") or {}
-        reasoning = additional.get("reasoning_content") or delta.get(
-            "reasoning_content"
-        )
+        reasoning = additional.get("reasoning_content") or delta.get("reasoning_content")
         if reasoning:
             self._had_thinking = True
             self._thinking_buffer.append(reasoning)
@@ -352,9 +342,7 @@ class _StreamState:
         events.append(_sse(EVENT_MESSAGE_DELTA, msg_delta))
 
         # message_stop
-        events.append(
-            _sse(EVENT_MESSAGE_STOP, _json_dumps({"type": EVENT_MESSAGE_STOP}))
-        )
+        events.append(_sse(EVENT_MESSAGE_STOP, _json_dumps({"type": EVENT_MESSAGE_STOP})))
 
         return events
 

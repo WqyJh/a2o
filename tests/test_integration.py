@@ -8,8 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from a2o.config import Config
-from a2o.server import create_app, AnthropicMessageHandler
-
+from a2o.server import AnthropicMessageHandler, create_app
 
 # ---------------------------------------------------------------------------
 # Mock upstream responses
@@ -83,9 +82,7 @@ def _create_mock_upstream() -> FastAPI:
         is_tool_result = last_msg.get("role") == "tool" or (
             isinstance(last_msg.get("content"), list)
             and any(
-                b.get("type") == "tool_result"
-                for b in last_msg["content"]
-                if isinstance(b, dict)
+                b.get("type") == "tool_result" for b in last_msg["content"] if isinstance(b, dict)
             )
         )
 
@@ -128,10 +125,10 @@ def _create_stream_upstream() -> FastAPI:
     @app.post("/v1/chat/completions")
     async def stream_chat(request: Request) -> Response:
         chunks = [
-            'data: {"id":"s-123","object":"chat.completion.chunk","model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}\n\n',
-            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n',
-            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{"content":" world!"},"finish_reason":null}]}\n\n',
-            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3}}\n\n',
+            'data: {"id":"s-123","object":"chat.completion.chunk","model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}\n\n',  # noqa: E501
+            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n',  # noqa: E501
+            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{"content":" world!"},"finish_reason":null}]}\n\n',  # noqa: E501
+            'data: {"id":"s-123","object":"chat.completion.chunk","model":"","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3}}\n\n',  # noqa: E501
             "data: [DONE]\n\n",
         ]
         body = "".join(chunks)
@@ -146,7 +143,8 @@ def _create_stream_upstream() -> FastAPI:
 
 
 def _make_proxy_client(
-    upstream_app: FastAPI, config_overrides: dict | None = None,
+    upstream_app: FastAPI,
+    config_overrides: dict | None = None,
 ) -> httpx.AsyncClient:
     """Create a test client for the proxy, wiring upstream to a mock ASGI app.
 

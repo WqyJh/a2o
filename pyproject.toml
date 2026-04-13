@@ -54,6 +54,7 @@ a2o = "a2o.cli:main"
 dev = [
     "pytest>=8.0,<9",
     "pytest-asyncio>=0.23,<1",
+    "ruff>=0.8",
 ]
 
 [build-system]

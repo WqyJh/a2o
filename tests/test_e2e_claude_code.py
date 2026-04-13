@@ -8,15 +8,13 @@ This test:
 
 import glob
 import os
-import subprocess
 import shutil
+import subprocess
 import threading
-import time
 
 import pytest
 
 from a2o.config import Config
-
 
 # The upstream endpoint provided by the user
 REAL_UPSTREAM_URL = os.environ.get(
@@ -47,8 +45,9 @@ def _start_proxy_thread(config: Config, ready_event: threading.Event) -> threadi
     Returns a stop_event that, when set, will shut down the proxy.
     """
     import asyncio
-    import aiohttp
+
     from aiohttp import web
+
     from a2o.server import create_app
 
     stop_event = threading.Event()
@@ -97,8 +96,6 @@ class TestEndToEnd:
             stream_timeout=300,
         )
 
-        import aiohttp
-
         ready = threading.Event()
         stop = _start_proxy_thread(config, ready)
 
@@ -107,6 +104,7 @@ class TestEndToEnd:
 
         # Health check
         import urllib.request
+
         try:
             req = urllib.request.Request(f"http://{PROXY_HOST}:{PROXY_PORT}/health")
             resp = urllib.request.urlopen(req, timeout=5)
@@ -176,7 +174,7 @@ class TestEndToEnd:
         css_files = glob.glob(os.path.join(work_dir, "**", "*.css"), recursive=True)
         js_files = glob.glob(os.path.join(work_dir, "**", "*.js"), recursive=True)
 
-        print(f"\nGenerated files:")
+        print("\nGenerated files:")
         print(f"  HTML: {html_files}")
         print(f"  CSS:  {css_files}")
         print(f"  JS:   {js_files}")
@@ -193,9 +191,7 @@ class TestEndToEnd:
 
         assert "<html" in html_content.lower(), "index.html missing <html> tag"
         assert "<h1" in html_content.lower(), "index.html missing <h1> tag"
-        assert "my portfolio" in html_content.lower(), (
-            "index.html missing 'My Portfolio' heading"
-        )
+        assert "my portfolio" in html_content.lower(), "index.html missing 'My Portfolio' heading"
         assert "<form" in html_content.lower(), "index.html missing <form> element"
         assert "style.css" in html_content, "index.html missing link to style.css"
         assert "script.js" in html_content, "index.html missing link to script.js"
@@ -206,17 +202,13 @@ class TestEndToEnd:
         with open(css_path) as f:
             css_content = f.read()
         assert len(css_content.strip()) > 0, "style.css is empty"
-        assert "{" in css_content and "}" in css_content, (
-            "style.css contains no CSS rules"
-        )
+        assert "{" in css_content and "}" in css_content, "style.css contains no CSS rules"
 
         # Verify script.js content
         js_path = os.path.join(work_dir, "script.js")
         assert os.path.exists(js_path), "script.js not found"
         with open(js_path) as f:
             js_content = f.read()
-        assert "submit" in js_content.lower(), (
-            "script.js missing 'submit' event listener"
-        )
+        assert "submit" in js_content.lower(), "script.js missing 'submit' event listener"
 
         print("\nAll file validations passed!")

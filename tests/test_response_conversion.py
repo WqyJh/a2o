@@ -1,7 +1,5 @@
 """Unit tests for OpenAI → Anthropic response conversion."""
 
-import pytest
-
 from a2o.converters.response import convert_openai_to_anthropic
 
 

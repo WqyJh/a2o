@@ -8,7 +8,6 @@ from typing import Any
 
 from a2o.models import AnthropicUsage
 
-
 _FINISH_REASON_MAP = {
     "stop": "end_turn",
     "length": "max_tokens",
@@ -79,14 +78,8 @@ def convert_openai_to_anthropic(
         # Reasoning content (thinking)
         additional = message.get("_additionalProperties") or {}
         # Some backends put reasoning_content at the top level of the message dict
-        reasoning = additional.get("reasoning_content") or message.get(
-            "reasoning_content"
-        )
-        signature = (
-            additional.get("thinking_signature")
-            or message.get("_thinking_signature")
-            or ""
-        )
+        reasoning = additional.get("reasoning_content") or message.get("reasoning_content")
+        signature = additional.get("thinking_signature") or message.get("_thinking_signature") or ""
         if reasoning:
             # If content is empty and reasoning_content has text, it's the model's
             # actual answer being placed in the thinking field (common with extended
@@ -102,9 +95,7 @@ def convert_openai_to_anthropic(
                     }
                 )
         # Redacted thinking support
-        redacted = additional.get("redacted_thinking") or message.get(
-            "redacted_thinking"
-        )
+        redacted = additional.get("redacted_thinking") or message.get("redacted_thinking")
         if redacted:
             content.append(
                 redacted
