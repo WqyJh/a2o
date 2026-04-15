@@ -288,37 +288,29 @@ def _config_to_env(config: Config) -> dict[str, str]:
 
     env = os.environ.copy()
     for field_name in config.__dataclass_fields__:
-        env[f"{_ENV_PREFIX}{field_name.upper()}"] = str(getattr(config, field_name))
+        val = getattr(config, field_name)
+        env[f"{_ENV_PREFIX}{field_name.upper()}"] = "" if val is None else str(val)
     return env
-
-
-def _int_fields() -> frozenset[str]:
-    import dataclasses
-    import typing
-
-    hints = typing.get_type_hints(Config)
-    names: set[str] = set()
-    for f in dataclasses.fields(Config):
-        t = hints.get(f.name)
-        if t is int:
-            names.add(f.name)
-        elif hasattr(t, "__args__") and int in t.__args__:
-            names.add(f.name)
-    return frozenset(names)
-
-
-_INT_FIELDS = _int_fields()
 
 
 def create_app_from_env() -> FastAPI:
     """Factory called by uvicorn workers -- reads config from env vars."""
+    import dataclasses
     import os
+    import typing
 
+    hints = typing.get_type_hints(Config)
     kwargs: dict[str, Any] = {}
-    for field_name in Config.__dataclass_fields__:
-        env_val = os.environ.get(f"{_ENV_PREFIX}{field_name.upper()}")
-        if env_val is not None:
-            kwargs[field_name] = int(env_val) if field_name in _INT_FIELDS else env_val
+    for f in dataclasses.fields(Config):
+        env_val = os.environ.get(f"{_ENV_PREFIX}{f.name.upper()}")
+        if env_val is None:
+            continue
+        if env_val == "":
+            kwargs[f.name] = None
+        else:
+            t = hints.get(f.name)
+            is_int = t is int or (hasattr(t, "__args__") and int in t.__args__)
+            kwargs[f.name] = int(env_val) if is_int else env_val
     return create_app(Config(**kwargs))
 
 
