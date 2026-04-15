@@ -52,7 +52,7 @@ class AnthropicMessageHandler:
                     max_connections=self.config.max_connections,
                     max_keepalive_connections=self.config.max_connections_per_host,
                 ),
-                timeout=httpx.Timeout(self.config.request_timeout),
+                timeout=httpx.Timeout(self.config.request_timeout) if self.config.request_timeout is not None else httpx.Timeout(None),
             )
         return self._client
 
@@ -292,9 +292,22 @@ def _config_to_env(config: Config) -> dict[str, str]:
     return env
 
 
-_INT_FIELDS = frozenset(
-    f.name for f in Config.__dataclass_fields__.values() if isinstance(f.default, int)
-)
+def _int_fields() -> frozenset[str]:
+    import dataclasses
+    import typing
+
+    hints = typing.get_type_hints(Config)
+    names: set[str] = set()
+    for f in dataclasses.fields(Config):
+        t = hints.get(f.name)
+        if t is int:
+            names.add(f.name)
+        elif hasattr(t, "__args__") and int in t.__args__:
+            names.add(f.name)
+    return frozenset(names)
+
+
+_INT_FIELDS = _int_fields()
 
 
 def create_app_from_env() -> FastAPI:

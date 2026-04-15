@@ -25,8 +25,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=300,
-        help="Request timeout in seconds (default: 300)",
+        default=None,
+        help="Request timeout in seconds (default: none, rely on upstream timeout)",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
