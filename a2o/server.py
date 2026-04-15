@@ -52,7 +52,7 @@ class AnthropicMessageHandler:
                     max_connections=self.config.max_connections,
                     max_keepalive_connections=self.config.max_connections_per_host,
                 ),
-                timeout=httpx.Timeout(self.config.request_timeout) if self.config.request_timeout is not None else httpx.Timeout(None),
+                timeout=httpx.Timeout(self.config.request_timeout),
             )
         return self._client
 
