@@ -337,12 +337,12 @@ def run_server(config: Config) -> None:
             host=config.host,
             port=config.port,
             workers=config.workers,
-            log_level="info",
+            log_config=None,
         )
     else:
         uvicorn.run(
             create_app(config),
             host=config.host,
             port=config.port,
-            log_level="info",
+            log_config=None,
         )

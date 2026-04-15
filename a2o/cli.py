@@ -29,6 +29,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Request timeout in seconds (default: none, rely on upstream timeout)",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--log-file", default=None, help="Write logs to file")
     parser.add_argument(
         "--workers",
         type=int,
@@ -52,9 +53,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
+    log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if args.log_file:
+        log_handlers.append(logging.FileHandler(args.log_file))
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=log_handlers,
     )
 
     config = Config(
