@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import logging
 
 from a2o.config import Config
 from a2o.server import run_server
@@ -53,14 +52,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
-    log_handlers: list[logging.Handler] = [logging.StreamHandler()]
-    if args.log_file:
-        log_handlers.append(logging.FileHandler(args.log_file))
-    logging.basicConfig(
-        level=logging.DEBUG if args.debug else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        handlers=log_handlers,
-    )
 
     config = Config(
         openai_base_url=args.upstream,
@@ -72,6 +63,8 @@ def main(argv: list[str] | None = None) -> None:
         workers=args.workers,
         max_connections=args.max_connections,
         max_connections_per_host=args.max_connections_per_host,
+        log_file=args.log_file or "",
+        debug=1 if args.debug else 0,
     )
 
     try:

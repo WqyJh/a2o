@@ -280,6 +280,21 @@ def create_app(config: Config) -> FastAPI:
 
 
 _ENV_PREFIX = "A2O_"
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+def _setup_logging(config: Config) -> None:
+    """Configure logging for the current process."""
+    import logging as _logging
+
+    root = _logging.getLogger()
+    if root.handlers:
+        return
+    level = _logging.DEBUG if config.debug else _logging.INFO
+    handlers: list[_logging.Handler] = [_logging.StreamHandler()]
+    if config.log_file:
+        handlers.append(_logging.FileHandler(config.log_file))
+    _logging.basicConfig(level=level, format=_LOG_FORMAT, handlers=handlers)
 
 
 def _config_to_env(config: Config) -> dict[str, str]:
@@ -293,8 +308,8 @@ def _config_to_env(config: Config) -> dict[str, str]:
     return env
 
 
-def create_app_from_env() -> FastAPI:
-    """Factory called by uvicorn workers -- reads config from env vars."""
+def _config_from_env() -> Config:
+    """Deserialize config from environment variables."""
     import dataclasses
     import os
     import typing
@@ -311,7 +326,14 @@ def create_app_from_env() -> FastAPI:
             t = hints.get(f.name)
             is_int = t is int or (hasattr(t, "__args__") and int in t.__args__)
             kwargs[f.name] = int(env_val) if is_int else env_val
-    return create_app(Config(**kwargs))
+    return Config(**kwargs)
+
+
+def create_app_from_env() -> FastAPI:
+    """Factory called by uvicorn workers -- reads config from env vars."""
+    config = _config_from_env()
+    _setup_logging(config)
+    return create_app(config)
 
 
 def run_server(config: Config) -> None:
@@ -319,6 +341,8 @@ def run_server(config: Config) -> None:
     import os
 
     import uvicorn
+
+    _setup_logging(config)
 
     logger.info(
         "Starting server on %s:%s -> %s (workers=%d)",

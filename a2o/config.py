@@ -16,3 +16,5 @@ class Config:
     workers: int = 1
     max_connections: int = 1000
     max_connections_per_host: int = 500
+    log_file: str = ""
+    debug: int = 0
